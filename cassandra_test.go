@@ -1,4 +1,4 @@
-package cassandra
+package sandra
 
 import (
 	"testing"

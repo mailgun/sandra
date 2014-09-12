@@ -1,4 +1,4 @@
-package cassandra
+package sandra
 
 import (
 	"fmt"
@@ -34,6 +34,6 @@ func (c *TestErrorCassandra) IterQuery(queryString string, queryParams []interfa
 	}
 }
 
-func (c *TestErrorCassandra) Close() (error) {
+func (c *TestErrorCassandra) Close() error {
 	return fmt.Errorf("Error during Close")
 }
