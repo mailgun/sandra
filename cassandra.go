@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/gocql/gocql"
-	log "github.com/mailgun/gotools-log"
+	"github.com/mailgun/log"
 )
 
 type Cassandra interface {
