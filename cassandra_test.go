@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/gocql/gocql"
-	. "launchpad.net/gocheck"
+	. "gopkg.in/check.v1"
 )
 
 func TestCassandra(t *testing.T) { TestingT(t) }
@@ -18,8 +18,8 @@ var _ = Suite(&CassandraSuite{})
 
 func (s *CassandraSuite) SetUpSuite(c *C) {
 	cassandra, err := NewCassandra(
-		NewCassandraConfig(
-			[]string{"localhost"}, "cassandra_test", false))
+		NewTestCassandraConfig(
+			[]string{"localhost"}, "cassandra_test"))
 
 	if err != nil {
 		c.Fatal(err)
@@ -41,20 +41,20 @@ func (s *CassandraSuite) SetUpTest(c *C) {
 	}
 }
 
-func (s *CassandraSuite) TestNewCassandraConfigNonProductionMode(c *C) {
-	config := NewCassandraConfig([]string{"1.1.1.1"}, "my_keyspace", false)
+func (s *CassandraSuite) TestNewCassandraConfig(c *C) {
+	config, _ := NewCassandraConfig([]string{"1.1.1.1"}, "my_keyspace", "localquorum")
 	c.Assert(config.Nodes, DeepEquals, []string{"1.1.1.1"})
 	c.Assert(config.Keyspace, Equals, "my_keyspace")
-	c.Assert(config.ReplicationFactor, Equals, 1)
-	c.Assert(config.ConsistencyLevel, Equals, gocql.One)
+	c.Assert(config.Consistency, Equals, gocql.LocalQuorum)
+	c.Assert(config.TestMode, Equals, false)
 }
 
-func (s *CassandraSuite) TestNewCassandraConfigProductionMode(c *C) {
-	config := NewCassandraConfig([]string{"1.1.1.1"}, "my_keyspace", true)
+func (s *CassandraSuite) TestNewTestCassandraConfig(c *C) {
+	config := NewTestCassandraConfig([]string{"1.1.1.1"}, "my_keyspace")
 	c.Assert(config.Nodes, DeepEquals, []string{"1.1.1.1"})
 	c.Assert(config.Keyspace, Equals, "my_keyspace")
-	c.Assert(config.ReplicationFactor, Equals, 3)
-	c.Assert(config.ConsistencyLevel, Equals, gocql.Two)
+	c.Assert(config.Consistency, Equals, gocql.One)
+	c.Assert(config.TestMode, Equals, true)
 }
 
 func (s *CassandraSuite) TestExecuteQuerySuccess(c *C) {

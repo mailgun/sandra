@@ -24,64 +24,70 @@ type cassandra struct {
 }
 
 type CassandraConfig struct {
-	Nodes             []string
-	Keyspace          string
-	ReplicationFactor int
-	ConsistencyLevel  gocql.Consistency
+	Nodes       []string
+	Keyspace    string
+	Consistency gocql.Consistency
+
+	// TestMode affects whether a keyspace creation will be attempted on Cassandra initialization.
+	TestMode bool
 }
 
 var NotFound = errors.New("Not found")
 
-func NewCassandraConfig(nodes []string, keyspace string, productionMode bool) *CassandraConfig {
-	config := &CassandraConfig{
-		Nodes:    nodes,
-		Keyspace: keyspace,
+func NewCassandraConfig(nodes []string, keyspace, consistencyName string) (*CassandraConfig, error) {
+	consistency, err := translateConsistency(consistencyName)
+	if err != nil {
+		return nil, err
 	}
+	return &CassandraConfig{
+		Nodes:       nodes,
+		Keyspace:    keyspace,
+		Consistency: consistency,
+	}, nil
+}
 
-	if productionMode == true {
-		config.ReplicationFactor = 3
-		config.ConsistencyLevel = gocql.Two
-	} else {
-		config.ReplicationFactor = 1
-		config.ConsistencyLevel = gocql.One
-	}
-
+func NewTestCassandraConfig(nodes []string, keyspace string) *CassandraConfig {
+	config, _ := NewCassandraConfig(nodes, keyspace, "one")
+	config.TestMode = true
 	return config
 }
 
 func NewCassandra(config *CassandraConfig) (Cassandra, error) {
-	log.Infof("Connecting to Cassandra with config %v", config)
+	log.Infof("Connecting to Cassandra with config: %v", config)
 
 	// initialize connection
 	cluster := gocql.NewCluster(config.Nodes...)
-	cluster.Keyspace = ""
-	cluster.Consistency = config.ConsistencyLevel
+	cluster.Consistency = config.Consistency
 	cluster.ProtoVersion = 2
 	cluster.CQLVersion = "3.0.0"
 
-	session, err := cluster.CreateSession()
-	if err != nil {
-		return nil, err
-	}
+	if config.TestMode == true {
+		cluster.Keyspace = ""
 
-	// initialize schema
-	query := session.Query(
-		fmt.Sprintf(
-			`create keyspace if not exists %v
-               with replication = {
-                 'class': 'SimpleStrategy',
-                 'replication_factor': %v}`,
-			config.Keyspace,
-			config.ReplicationFactor))
-	if err := query.Exec(); err != nil {
-		log.Errorf("Error creating keyspace: %v", err)
-	}
+		session, err := cluster.CreateSession()
+		if err != nil {
+			return nil, err
+		}
 
-	session.Close()
+		// initialize schema
+		query := session.Query(
+			fmt.Sprintf(
+				`create keyspace if not exists %v
+                   with replication = {
+                     'class': 'SimpleStrategy',
+                     'replication_factor': 1}`,
+				config.Keyspace))
+
+		if err := query.Exec(); err != nil {
+			log.Errorf("Error creating keyspace: %v", err)
+		}
+
+		session.Close()
+	}
 
 	cluster.Keyspace = config.Keyspace
 
-	session, err = cluster.CreateSession()
+	session, err := cluster.CreateSession()
 	if err != nil {
 		return nil, err
 	}
@@ -146,4 +152,14 @@ func (c *cassandra) IterQuery(queryString string, queryParams []interface{}, out
 		}
 		return idx, false, nil
 	}
+}
+
+// Return appropriate gocql.Consistency based on the provided consistency level name.
+func translateConsistency(consistencyName string) (gocql.Consistency, error) {
+	for index, name := range gocql.ConsistencyNames {
+		if name == consistencyName {
+			return gocql.Consistency(index), nil
+		}
+	}
+	return gocql.One, fmt.Errorf("unknown consistency: %v", consistencyName)
 }
