@@ -32,7 +32,7 @@ type CassandraConfig struct {
 	TestMode bool `config:"optional"`
 }
 
-func (c CassandraConfig) String() {
+func (c CassandraConfig) String() string {
 	return fmt.Sprintf("CassandraConfig(Nodes=%v, Keyspace=%v, Consistency=%v, TestMode=%v)",
 		c.Nodes, c.Keyspace, c.Consistency, c.TestMode)
 }
