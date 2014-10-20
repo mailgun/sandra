@@ -26,56 +26,41 @@ type cassandra struct {
 type CassandraConfig struct {
 	Nodes       []string
 	Keyspace    string
-	Consistency gocql.Consistency
+	Consistency string
 
 	// TestMode affects whether a keyspace creation will be attempted on Cassandra initialization.
-	TestMode bool
+	TestMode bool `config:"optional"`
 }
 
 var NotFound = errors.New("Not found")
 
-func NewCassandraConfig(nodes []string, keyspace, consistencyName string) (*CassandraConfig, error) {
-	consistency, err := translateConsistency(consistencyName)
-	if err != nil {
-		return nil, err
-	}
-	return &CassandraConfig{
-		Nodes:       nodes,
-		Keyspace:    keyspace,
-		Consistency: consistency,
-	}, nil
-}
-
-func NewTestCassandraConfig(nodes []string, keyspace string) *CassandraConfig {
-	config, _ := NewCassandraConfig(nodes, keyspace, "one")
-	config.TestMode = true
-	return config
-}
-
-func NewCassandra(config *CassandraConfig) (Cassandra, error) {
+func NewCassandra(config CassandraConfig) (Cassandra, error) {
 	log.Infof("Connecting to Cassandra with config: %v", config)
 
-	// initialize connection
+	// configure connection
 	cluster := gocql.NewCluster(config.Nodes...)
-	cluster.Consistency = config.Consistency
 	cluster.ProtoVersion = 2
 	cluster.CQLVersion = "3.0.0"
 
-	if config.TestMode == true {
-		cluster.Keyspace = ""
+	// convert consistency name into appropriate gocql.Consistency value
+	consistency, err := translateConsistency(config.Consistency)
+	if err != nil {
+		return nil, err
+	}
 
+	cluster.Consistency = consistency
+
+	// in test mode, create a keyspace if necessary
+	if config.TestMode == true {
 		session, err := cluster.CreateSession()
 		if err != nil {
 			return nil, err
 		}
 
-		// initialize schema
 		query := session.Query(
 			fmt.Sprintf(
 				`create keyspace if not exists %v
-                   with replication = {
-                     'class': 'SimpleStrategy',
-                     'replication_factor': 1}`,
+                   with replication = {'class': 'SimpleStrategy', 'replication_factor': 1}`,
 				config.Keyspace))
 
 		if err := query.Exec(); err != nil {
@@ -85,6 +70,7 @@ func NewCassandra(config *CassandraConfig) (Cassandra, error) {
 		session.Close()
 	}
 
+	// switch the keyspace
 	cluster.Keyspace = config.Keyspace
 
 	session, err := cluster.CreateSession()

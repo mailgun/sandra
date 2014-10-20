@@ -18,8 +18,12 @@ var _ = Suite(&CassandraSuite{})
 
 func (s *CassandraSuite) SetUpSuite(c *C) {
 	cassandra, err := NewCassandra(
-		NewTestCassandraConfig(
-			[]string{"localhost"}, "cassandra_test"))
+		CassandraConfig{
+			Nodes:       []string{"localhost"},
+			Keyspace:    "cassandra_test",
+			Consistency: "one",
+			TestMode:    true,
+		})
 
 	if err != nil {
 		c.Fatal(err)
@@ -39,22 +43,6 @@ func (s *CassandraSuite) SetUpTest(c *C) {
 	if err := s.cassandra.ExecuteQuery("truncate test"); err != nil {
 		c.Fatal(err)
 	}
-}
-
-func (s *CassandraSuite) TestNewCassandraConfig(c *C) {
-	config, _ := NewCassandraConfig([]string{"1.1.1.1"}, "my_keyspace", "localquorum")
-	c.Assert(config.Nodes, DeepEquals, []string{"1.1.1.1"})
-	c.Assert(config.Keyspace, Equals, "my_keyspace")
-	c.Assert(config.Consistency, Equals, gocql.LocalQuorum)
-	c.Assert(config.TestMode, Equals, false)
-}
-
-func (s *CassandraSuite) TestNewTestCassandraConfig(c *C) {
-	config := NewTestCassandraConfig([]string{"1.1.1.1"}, "my_keyspace")
-	c.Assert(config.Nodes, DeepEquals, []string{"1.1.1.1"})
-	c.Assert(config.Keyspace, Equals, "my_keyspace")
-	c.Assert(config.Consistency, Equals, gocql.One)
-	c.Assert(config.TestMode, Equals, true)
 }
 
 func (s *CassandraSuite) TestExecuteQuerySuccess(c *C) {
