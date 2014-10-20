@@ -32,6 +32,11 @@ type CassandraConfig struct {
 	TestMode bool `config:"optional"`
 }
 
+func (c CassandraConfig) String() {
+	return fmt.Sprintf("CassandraConfig(Nodes=%v, Keyspace=%v, Consistency=%v, TestMode=%v)",
+		c.Nodes, c.Keyspace, c.Consistency, c.TestMode)
+}
+
 var NotFound = errors.New("Not found")
 
 func NewCassandra(config CassandraConfig) (Cassandra, error) {
