@@ -190,6 +190,7 @@ func setDefaults(cfg CassandraConfig) (*gocql.ClusterConfig, error) {
 	cluster.CQLVersion = "3.0.0"
 	cluster.Timeout = timeout
 	cluster.NumConns = cfg.NumConns
+	cluster.NumStreams = cfg.NumStreams
 	cluster.Consistency = consistency
 	cluster.SocketKeepalive = keepAlive
 	return cluster, nil
