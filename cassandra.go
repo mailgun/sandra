@@ -26,14 +26,14 @@ type cassandra struct {
 
 // CassandraConfig is a json and yaml friendly configuration struct
 type CassandraConfig struct {
-	Nodes       []string      // addresses for the initial connections
-	Timeout     time.Duration // connection timeout (default: 600ms)
-	Keyspace    string        // initial keyspace (optional)
-	NumConns    int           // number of connections per host (default: 2)
-	NumStreams  int           // number of streams per connection (default: 128)
-	Consistency string        // consistency to use, default quorum
-	Port        int           // port to connect to, default: 9042
-	KeepAlive   string        // The keepalive period to use default: 0
+	Nodes       []string // addresses for the initial connections
+	Timeout     string   // connection timeout (default: 600ms)
+	Keyspace    string   // initial keyspace (optional)
+	NumConns    int      // number of connections per host (default: 2)
+	NumStreams  int      // number of streams per connection (default: 128)
+	Consistency string   // consistency to use, default quorum
+	Port        int      // port to connect to, default: 9042
+	KeepAlive   string   // The keepalive period to use default: 0
 
 	// TestMode affects whether a keyspace creation will be attempted on Cassandra initialization.
 	TestMode bool `config:"optional"`
@@ -154,9 +154,9 @@ func translateConsistency(consistencyName string) (gocql.Consistency, error) {
 	return gocql.One, fmt.Errorf("unknown consistency: %v", consistencyName)
 }
 
-func translateKeepAlive(k string) (time.Duration, error) {
+func translateDuration(k string, df time.Duration) (time.Duration, error) {
 	if k == "" {
-		return 0, nil
+		return df, nil
 	}
 	return time.ParseDuration(k)
 }
@@ -168,13 +168,13 @@ func setDefaults(cfg CassandraConfig) (*gocql.ClusterConfig, error) {
 		return nil, err
 	}
 
-	keepAlive, err := translateKeepAlive(cfg.KeepAlive)
+	keepAlive, err := translateDuration(cfg.KeepAlive, 0)
 	if err != nil {
 		return nil, err
 	}
-
-	if cfg.Timeout == 0 {
-		cfg.Timeout = 600 * time.Millisecond
+	timeout, err := translateDuration(cfg.Timeout, 600*time.Millisecond)
+	if err != nil {
+		return nil, err
 	}
 	if cfg.Port == 0 {
 		cfg.Port = 9042
@@ -188,7 +188,7 @@ func setDefaults(cfg CassandraConfig) (*gocql.ClusterConfig, error) {
 	cluster := gocql.NewCluster(cfg.Nodes...)
 	cluster.ProtoVersion = 2
 	cluster.CQLVersion = "3.0.0"
-	cluster.Timeout = cfg.Timeout
+	cluster.Timeout = timeout
 	cluster.NumConns = cfg.NumConns
 	cluster.Consistency = consistency
 	cluster.SocketKeepalive = keepAlive
