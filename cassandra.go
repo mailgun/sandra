@@ -3,6 +3,7 @@ package sandra
 import (
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/gocql/gocql"
 	"github.com/mailgun/log"
@@ -23,10 +24,16 @@ type cassandra struct {
 	config  CassandraConfig
 }
 
+// CassandraConfig is a json and yaml friendly configuration struct
 type CassandraConfig struct {
-	Nodes       []string
-	Keyspace    string
-	Consistency string
+	Nodes       []string // addresses for the initial connections
+	Timeout     string   // connection timeout (default: 600ms)
+	Keyspace    string   // initial keyspace (optional)
+	NumConns    int      // number of connections per host (default: 2)
+	NumStreams  int      // number of streams per connection (default: 128)
+	Consistency string   // consistency to use, default quorum
+	Port        int      // port to connect to, default: 9042
+	KeepAlive   string   // The keepalive period to use default: 0
 
 	// TestMode affects whether a keyspace creation will be attempted on Cassandra initialization.
 	TestMode bool `config:"optional"`
@@ -42,18 +49,10 @@ var NotFound = errors.New("Not found")
 func NewCassandra(config CassandraConfig) (Cassandra, error) {
 	log.Infof("Connecting to Cassandra with config: %v", config)
 
-	// configure connection
-	cluster := gocql.NewCluster(config.Nodes...)
-	cluster.ProtoVersion = 2
-	cluster.CQLVersion = "3.0.0"
-
-	// convert consistency name into appropriate gocql.Consistency value
-	consistency, err := translateConsistency(config.Consistency)
+	cluster, err := setDefaults(config)
 	if err != nil {
 		return nil, err
 	}
-
-	cluster.Consistency = consistency
 
 	// in test mode, create a keyspace if necessary
 	if config.TestMode == true {
@@ -153,4 +152,46 @@ func translateConsistency(consistencyName string) (gocql.Consistency, error) {
 		}
 	}
 	return gocql.One, fmt.Errorf("unknown consistency: %v", consistencyName)
+}
+
+func translateDuration(k string, df time.Duration) (time.Duration, error) {
+	if k == "" {
+		return df, nil
+	}
+	return time.ParseDuration(k)
+}
+
+func setDefaults(cfg CassandraConfig) (*gocql.ClusterConfig, error) {
+	// convert consistency name into appropriate gocql.Consistency value
+	consistency, err := translateConsistency(cfg.Consistency)
+	if err != nil {
+		return nil, err
+	}
+	keepAlive, err := translateDuration(cfg.KeepAlive, 0)
+	if err != nil {
+		return nil, err
+	}
+	timeout, err := translateDuration(cfg.Timeout, 600*time.Millisecond)
+	if err != nil {
+		return nil, err
+	}
+	if cfg.Port == 0 {
+		cfg.Port = 9042
+	}
+	if cfg.NumConns == 0 {
+		cfg.NumConns = 2
+	}
+	if cfg.NumStreams == 0 {
+		cfg.NumStreams = 128
+	}
+	cluster := gocql.NewCluster(cfg.Nodes...)
+	cluster.ProtoVersion = 2
+	cluster.CQLVersion = "3.0.0"
+	cluster.Timeout = timeout
+	cluster.NumConns = cfg.NumConns
+	cluster.NumStreams = cfg.NumStreams
+	cluster.Consistency = consistency
+	cluster.SocketKeepalive = keepAlive
+	cluster.Port = cfg.Port
+	return cluster, nil
 }
