@@ -167,7 +167,6 @@ func setDefaults(cfg CassandraConfig) (*gocql.ClusterConfig, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	keepAlive, err := translateDuration(cfg.KeepAlive, 0)
 	if err != nil {
 		return nil, err
