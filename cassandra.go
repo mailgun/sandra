@@ -193,5 +193,6 @@ func setDefaults(cfg CassandraConfig) (*gocql.ClusterConfig, error) {
 	cluster.NumStreams = cfg.NumStreams
 	cluster.Consistency = consistency
 	cluster.SocketKeepalive = keepAlive
+	cluster.Port = cfg.Port
 	return cluster, nil
 }
