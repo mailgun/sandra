@@ -26,14 +26,15 @@ type cassandra struct {
 
 // CassandraConfig is a json and yaml friendly configuration struct
 type CassandraConfig struct {
+	// Required Parameters
 	Nodes       []string // addresses for the initial connections
-	Timeout     string   // connection timeout (default: 600ms)
-	Keyspace    string   // initial keyspace (optional)
-	NumConns    int      // number of connections per host (default: 2)
-	NumStreams  int      // number of streams per connection (default: 128)
-	Consistency string   // consistency to use, default quorum
-	Port        int      // port to connect to, default: 9042
-	KeepAlive   string   // The keepalive period to use default: 0
+	Keyspace    string   // initial keyspace
+	Consistency string   `config:"optional"` // consistency to use, default quorum
+	Timeout     string   `config:"optional"` // connection timeout (default: 600ms)
+	KeepAlive   string   `config:"optional"` // The keepalive period to use default: 0
+	NumConns    int      `config:"optional"` // number of connections per host (default: 2)
+	NumStreams  int      `config:"optional"` // number of streams per connection (default: 128)
+	Port        int      `config:"optional"` // port to connect to, default: 9042
 
 	// TestMode affects whether a keyspace creation will be attempted on Cassandra initialization.
 	TestMode bool `config:"optional"`
