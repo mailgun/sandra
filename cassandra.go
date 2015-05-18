@@ -10,7 +10,7 @@ import (
 )
 
 type Cassandra interface {
-	GetQuery(gocql.Consistency, string, ...interface{}) *gocql.Query
+	Query(gocql.Consistency, string, ...interface{}) *gocql.Query
 	ExecuteQuery(string, ...interface{}) error
 	ExecuteBatch(gocql.BatchType, []string, [][]interface{}) error
 	ExecuteUnloggedBatch([]string, [][]interface{}) error
@@ -105,15 +105,15 @@ func (c *cassandra) Close() error {
 	return nil
 }
 
-// GetQuery provides an access to the gocql.Query if a user of this library needs to tune some parameters for
+// Query provides an access to the gocql.Query if a user of this library needs to tune some parameters for
 // a specific query without modifying the parameters the library was configured with, for example to use
 // a consistency level that differs from the configured read/write consistency levels.
-func (c *cassandra) GetQuery(consistency gocql.Consistency, queryString string, queryParams ...interface{}) *gocql.Query {
+func (c *cassandra) Query(consistency gocql.Consistency, queryString string, queryParams ...interface{}) *gocql.Query {
 	return c.session.Query(queryString, queryParams...).Consistency(consistency)
 }
 
 func (c *cassandra) ExecuteQuery(queryString string, queryParams ...interface{}) error {
-	return c.GetQuery(c.wcl, queryString, queryParams...).Exec()
+	return c.Query(c.wcl, queryString, queryParams...).Exec()
 }
 
 func (c *cassandra) ExecuteBatch(batchType gocql.BatchType, queries []string, params [][]interface{}) error {
@@ -138,7 +138,7 @@ func (c *cassandra) ExecuteUnloggedBatch(queries []string, params [][]interface{
 }
 
 func (c *cassandra) ScanQuery(queryString string, queryParams []interface{}, outParams ...interface{}) error {
-	if err := c.GetQuery(c.rcl, queryString, queryParams...).Scan(outParams...); err != nil {
+	if err := c.Query(c.rcl, queryString, queryParams...).Scan(outParams...); err != nil {
 		if err == gocql.ErrNotFound {
 			return NotFound
 		}
@@ -149,11 +149,11 @@ func (c *cassandra) ScanQuery(queryString string, queryParams []interface{}, out
 
 // Execute a lightweight transaction (an UPDATE or INSERT statement containing an IF clause)
 func (c *cassandra) ScanCASQuery(queryString string, queryParams []interface{}, outParams ...interface{}) (bool, error) {
-	return c.GetQuery(c.rcl, queryString, queryParams...).ScanCAS(outParams...)
+	return c.Query(c.rcl, queryString, queryParams...).ScanCAS(outParams...)
 }
 
 func (c *cassandra) IterQuery(queryString string, queryParams []interface{}, outParams ...interface{}) func() (int, bool, error) {
-	iter := c.GetQuery(c.rcl, queryString, queryParams...).Iter()
+	iter := c.Query(c.rcl, queryString, queryParams...).Iter()
 	idx := -1
 	return func() (int, bool, error) {
 		idx++

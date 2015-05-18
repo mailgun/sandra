@@ -8,7 +8,7 @@ import (
 
 type TestErrorCassandra struct{}
 
-func (c *TestErrorCassandra) GetQuery(consistency gocql.Consistency, queryString string, queryParams ...interface{}) *gocql.Query {
+func (c *TestErrorCassandra) Query(consistency gocql.Consistency, queryString string, queryParams ...interface{}) *gocql.Query {
 	return nil
 }
 
