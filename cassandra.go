@@ -10,6 +10,7 @@ import (
 )
 
 type Cassandra interface {
+	Query(gocql.Consistency, string, ...interface{}) *gocql.Query
 	ExecuteQuery(string, ...interface{}) error
 	ExecuteBatch(gocql.BatchType, []string, [][]interface{}) error
 	ExecuteUnloggedBatch([]string, [][]interface{}) error
@@ -22,27 +23,30 @@ type Cassandra interface {
 type cassandra struct {
 	session *gocql.Session
 	config  CassandraConfig
+	rcl     gocql.Consistency
+	wcl     gocql.Consistency
 }
 
 // CassandraConfig is a json and yaml friendly configuration struct
 type CassandraConfig struct {
 	// Required Parameters
-	Nodes       []string // addresses for the initial connections
-	Keyspace    string   // initial keyspace
-	Consistency string   `config:"optional"` // consistency to use, default quorum
-	Timeout     string   `config:"optional"` // connection timeout (default: 600ms)
-	KeepAlive   string   `config:"optional"` // The keepalive period to use default: 0
-	NumConns    int      `config:"optional"` // number of connections per host (default: 2)
-	NumStreams  int      `config:"optional"` // number of streams per connection (default: 128)
-	Port        int      `config:"optional"` // port to connect to, default: 9042
+	Nodes            []string // addresses for the initial connections
+	Keyspace         string   // initial keyspace
+	ReadConsistency  string   // consistency for read operations
+	WriteConsistency string   // consistency for write operations
+	Timeout          string   `config:"optional"` // connection timeout (default: 600ms)
+	KeepAlive        string   `config:"optional"` // The keepalive period to use default: 0
+	NumConns         int      `config:"optional"` // number of connections per host (default: 2)
+	NumStreams       int      `config:"optional"` // number of streams per connection (default: 128)
+	Port             int      `config:"optional"` // port to connect to, default: 9042
 
 	// TestMode affects whether a keyspace creation will be attempted on Cassandra initialization.
 	TestMode bool `config:"optional"`
 }
 
 func (c CassandraConfig) String() string {
-	return fmt.Sprintf("CassandraConfig(Nodes=%v, Keyspace=%v, Consistency=%v, TestMode=%v)",
-		c.Nodes, c.Keyspace, c.Consistency, c.TestMode)
+	return fmt.Sprintf("CassandraConfig(Nodes=%v, Keyspace=%v, ReadConsistency=%v, WriteConsistency=%v, TestMode=%v)",
+		c.Nodes, c.Keyspace, c.ReadConsistency, c.WriteConsistency, c.TestMode)
 }
 
 var NotFound = errors.New("Not found")
@@ -83,7 +87,17 @@ func NewCassandra(config CassandraConfig) (Cassandra, error) {
 		return nil, err
 	}
 
-	return &cassandra{session: session}, nil
+	rcl, err := translateConsistency(config.ReadConsistency)
+	if err != nil {
+		return nil, err
+	}
+
+	wcl, err := translateConsistency(config.WriteConsistency)
+	if err != nil {
+		return nil, err
+	}
+
+	return &cassandra{session, config, rcl, wcl}, nil
 }
 
 func (c *cassandra) Close() error {
@@ -91,10 +105,19 @@ func (c *cassandra) Close() error {
 	return nil
 }
 
-func (c *cassandra) ExecuteQuery(queryString string, queryParams ...interface{}) error {
-	return c.session.Query(queryString, queryParams...).Exec()
+// Query provides an access to the gocql.Query if a user of this library needs to tune some parameters for
+// a specific query without modifying the parameters the library was configured with, for example to use
+// a consistency level that differs from the configured read/write consistency levels.
+func (c *cassandra) Query(consistency gocql.Consistency, queryString string, queryParams ...interface{}) *gocql.Query {
+	return c.session.Query(queryString, queryParams...).Consistency(consistency)
 }
 
+// ExecuteQuery executes a single DML/DDL statement at the configured write consistency level.
+func (c *cassandra) ExecuteQuery(queryString string, queryParams ...interface{}) error {
+	return c.Query(c.wcl, queryString, queryParams...).Exec()
+}
+
+// ExecuteBatch executes a batch of DML/DDL statements at the configured write consistency level.
 func (c *cassandra) ExecuteBatch(batchType gocql.BatchType, queries []string, params [][]interface{}) error {
 	count := len(queries)
 
@@ -104,6 +127,7 @@ func (c *cassandra) ExecuteBatch(batchType gocql.BatchType, queries []string, pa
 	}
 
 	batch := gocql.NewBatch(batchType)
+	batch.Cons = c.wcl
 	for idx := 0; idx < count; idx++ {
 		batch.Query(queries[idx], params[idx]...)
 	}
@@ -111,12 +135,15 @@ func (c *cassandra) ExecuteBatch(batchType gocql.BatchType, queries []string, pa
 	return c.session.ExecuteBatch(batch)
 }
 
+// ExecuteUnloggedBatch executes a batch of DML/DDL statements in a non-atomic way at the configured
+// write consistency level.
 func (c *cassandra) ExecuteUnloggedBatch(queries []string, params [][]interface{}) error {
 	return c.ExecuteBatch(gocql.UnloggedBatch, queries, params)
 }
 
+// ScanQuery executes a provided SELECT query at the configured read consistency level.
 func (c *cassandra) ScanQuery(queryString string, queryParams []interface{}, outParams ...interface{}) error {
-	if err := c.session.Query(queryString, queryParams...).Scan(outParams...); err != nil {
+	if err := c.Query(c.rcl, queryString, queryParams...).Scan(outParams...); err != nil {
 		if err == gocql.ErrNotFound {
 			return NotFound
 		}
@@ -125,13 +152,15 @@ func (c *cassandra) ScanQuery(queryString string, queryParams []interface{}, out
 	return nil
 }
 
-// Execute a lightweight transaction (an UPDATE or INSERT statement containing an IF clause)
+// ScanCASQuery executes a lightweight transaction (an UPDATE or INSERT statement containing an IF clause)
+// at the configured write consistency level.
 func (c *cassandra) ScanCASQuery(queryString string, queryParams []interface{}, outParams ...interface{}) (bool, error) {
-	return c.session.Query(queryString, queryParams...).ScanCAS(outParams...)
+	return c.Query(c.wcl, queryString, queryParams...).ScanCAS(outParams...)
 }
 
+// IterQuery consumes row by row of the provided SELECT query executed at the configured read consistency level.
 func (c *cassandra) IterQuery(queryString string, queryParams []interface{}, outParams ...interface{}) func() (int, bool, error) {
-	iter := c.session.Query(queryString, queryParams...).Iter()
+	iter := c.Query(c.rcl, queryString, queryParams...).Iter()
 	idx := -1
 	return func() (int, bool, error) {
 		idx++
@@ -163,36 +192,36 @@ func translateDuration(k string, df time.Duration) (time.Duration, error) {
 }
 
 func setDefaults(cfg CassandraConfig) (*gocql.ClusterConfig, error) {
-	// convert consistency name into appropriate gocql.Consistency value
-	consistency, err := translateConsistency(cfg.Consistency)
-	if err != nil {
-		return nil, err
-	}
 	keepAlive, err := translateDuration(cfg.KeepAlive, 0)
 	if err != nil {
 		return nil, err
 	}
+
 	timeout, err := translateDuration(cfg.Timeout, 600*time.Millisecond)
 	if err != nil {
 		return nil, err
 	}
+
 	if cfg.Port == 0 {
 		cfg.Port = 9042
 	}
+
 	if cfg.NumConns == 0 {
 		cfg.NumConns = 2
 	}
+
 	if cfg.NumStreams == 0 {
 		cfg.NumStreams = 128
 	}
+
 	cluster := gocql.NewCluster(cfg.Nodes...)
 	cluster.ProtoVersion = 2
 	cluster.CQLVersion = "3.0.0"
 	cluster.Timeout = timeout
 	cluster.NumConns = cfg.NumConns
 	cluster.NumStreams = cfg.NumStreams
-	cluster.Consistency = consistency
 	cluster.SocketKeepalive = keepAlive
 	cluster.Port = cfg.Port
+
 	return cluster, nil
 }

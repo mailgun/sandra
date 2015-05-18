@@ -19,10 +19,11 @@ var _ = Suite(&CassandraSuite{})
 func (s *CassandraSuite) SetUpSuite(c *C) {
 	cassandra, err := NewCassandra(
 		CassandraConfig{
-			Nodes:       []string{"localhost"},
-			Keyspace:    "cassandra_test",
-			Consistency: "one",
-			TestMode:    true,
+			Nodes:            []string{"localhost"},
+			Keyspace:         "cassandra_test",
+			ReadConsistency:  "one",
+			WriteConsistency: "one",
+			TestMode:         true,
 		})
 
 	if err != nil {
@@ -36,6 +37,10 @@ func (s *CassandraSuite) SetUpSuite(c *C) {
 	if err = s.cassandra.ExecuteQuery("create table if not exists test (field int primary key)"); err != nil {
 		c.Fatal(err)
 	}
+}
+
+func (s *CassandraSuite) TearDownSuite(c *C) {
+	s.cassandra.Close()
 }
 
 func (s *CassandraSuite) SetUpTest(c *C) {
@@ -139,4 +144,51 @@ func (s *CassandraSuite) TestIterQueryError(c *C) {
 	c.Assert(idx, Equals, 0)
 	c.Assert(has_next, Equals, true)
 	c.Assert(err, NotNil)
+}
+
+func (s *CassandraSuite) TestConsistencyLevels(c *C) {
+	// create a new cassandra connection with the read consistency level
+	// that cannot be satisfied and verify scan queries fail
+	cassandra, err := NewCassandra(
+		CassandraConfig{
+			Nodes:            []string{"localhost"},
+			Keyspace:         "cassandra_test",
+			ReadConsistency:  "two", // cannot be satisfied
+			WriteConsistency: "one",
+			TestMode:         true,
+		})
+
+	// write should succeed
+	err = cassandra.ExecuteQuery("insert into test (field) values (42)")
+	c.Assert(err, IsNil)
+
+	// scan should fail
+	var field int
+	err = cassandra.ScanQuery("select * from test", []interface{}{}, &field)
+	c.Assert(err, NotNil)
+	c.Assert(err.Error(), Equals, "Cannot achieve consistency level TWO")
+
+	cassandra.Close()
+
+	// now do the same for the write consistency level
+	cassandra, err = NewCassandra(
+		CassandraConfig{
+			Nodes:            []string{"localhost"},
+			Keyspace:         "cassandra_test",
+			ReadConsistency:  "one",
+			WriteConsistency: "two", // cannot be satisfied
+			TestMode:         true,
+		})
+
+	// write should fail
+	err = cassandra.ExecuteQuery("delete from test where field = 42")
+	c.Assert(err, NotNil)
+	c.Assert(err.Error(), Equals, "Cannot achieve consistency level TWO")
+
+	// scan should succeed
+	err = cassandra.ScanQuery("select * from test", []interface{}{}, &field)
+	c.Assert(err, IsNil)
+	c.Assert(field, Equals, 42)
+
+	cassandra.Close()
 }
