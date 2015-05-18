@@ -8,6 +8,10 @@ import (
 
 type TestErrorCassandra struct{}
 
+func (c *TestErrorCassandra) GetQuery(consistency gocql.Consistency, queryString string, queryParams ...interface{}) *gocql.Query {
+	return nil
+}
+
 func (c *TestErrorCassandra) ExecuteQuery(queryString string, queryParams ...interface{}) error {
 	return fmt.Errorf("Error during ExecuteQuery")
 }
