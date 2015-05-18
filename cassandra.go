@@ -112,10 +112,12 @@ func (c *cassandra) Query(consistency gocql.Consistency, queryString string, que
 	return c.session.Query(queryString, queryParams...).Consistency(consistency)
 }
 
+// ExecuteQuery executes a single DML/DDL statement at the configured write consistency level.
 func (c *cassandra) ExecuteQuery(queryString string, queryParams ...interface{}) error {
 	return c.Query(c.wcl, queryString, queryParams...).Exec()
 }
 
+// ExecuteBatch executes a batch of DML/DDL statements at the configured write consistency level.
 func (c *cassandra) ExecuteBatch(batchType gocql.BatchType, queries []string, params [][]interface{}) error {
 	count := len(queries)
 
@@ -133,10 +135,13 @@ func (c *cassandra) ExecuteBatch(batchType gocql.BatchType, queries []string, pa
 	return c.session.ExecuteBatch(batch)
 }
 
+// ExecuteUnloggedBatch executes a batch of DML/DDL statements in a non-atomic way at the configured
+// write consistency level.
 func (c *cassandra) ExecuteUnloggedBatch(queries []string, params [][]interface{}) error {
 	return c.ExecuteBatch(gocql.UnloggedBatch, queries, params)
 }
 
+// ScanQuery executes a provided SELECT query at the configured read consistency level.
 func (c *cassandra) ScanQuery(queryString string, queryParams []interface{}, outParams ...interface{}) error {
 	if err := c.Query(c.rcl, queryString, queryParams...).Scan(outParams...); err != nil {
 		if err == gocql.ErrNotFound {
@@ -147,11 +152,13 @@ func (c *cassandra) ScanQuery(queryString string, queryParams []interface{}, out
 	return nil
 }
 
-// Execute a lightweight transaction (an UPDATE or INSERT statement containing an IF clause)
+// ScanCASQuery executes a lightweight transaction (an UPDATE or INSERT statement containing an IF clause)
+// at the configured write consistency level.
 func (c *cassandra) ScanCASQuery(queryString string, queryParams []interface{}, outParams ...interface{}) (bool, error) {
-	return c.Query(c.rcl, queryString, queryParams...).ScanCAS(outParams...)
+	return c.Query(c.wcl, queryString, queryParams...).ScanCAS(outParams...)
 }
 
+// IterQuery consumes row by row of the provided SELECT query executed at the configured read consistency level.
 func (c *cassandra) IterQuery(queryString string, queryParams []interface{}, outParams ...interface{}) func() (int, bool, error) {
 	iter := c.Query(c.rcl, queryString, queryParams...).Iter()
 	idx := -1
