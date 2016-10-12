@@ -19,6 +19,7 @@ var _ = Suite(&CassandraSuite{})
 func (s *CassandraSuite) SetUpSuite(c *C) {
 	cassandra, err := NewCassandra(
 		CassandraConfig{
+			DataCenter:       "datacenter1",
 			Nodes:            []string{"localhost"},
 			Keyspace:         "cassandra_test",
 			ReadConsistency:  "one",
@@ -151,6 +152,7 @@ func (s *CassandraSuite) TestConsistencyLevels(c *C) {
 	// that cannot be satisfied and verify scan queries fail
 	cassandra, err := NewCassandra(
 		CassandraConfig{
+			DataCenter:       "datacenter1",
 			Nodes:            []string{"localhost"},
 			Keyspace:         "cassandra_test",
 			ReadConsistency:  "two", // cannot be satisfied
@@ -173,6 +175,7 @@ func (s *CassandraSuite) TestConsistencyLevels(c *C) {
 	// now do the same for the write consistency level
 	cassandra, err = NewCassandra(
 		CassandraConfig{
+			DataCenter:       "datacenter1",
 			Nodes:            []string{"localhost"},
 			Keyspace:         "cassandra_test",
 			ReadConsistency:  "one",

@@ -31,13 +31,13 @@ type cassandra struct {
 type CassandraConfig struct {
 	// Required Parameters
 	Nodes            []string // addresses for the initial connections
+	DataCenter       string   // data center name
 	Keyspace         string   // initial keyspace
 	ReadConsistency  string   // consistency for read operations
 	WriteConsistency string   // consistency for write operations
 	Timeout          string   `config:"optional"` // connection timeout (default: 600ms)
 	KeepAlive        string   `config:"optional"` // The keepalive period to use default: 0
 	NumConns         int      `config:"optional"` // number of connections per host (default: 2)
-	NumStreams       int      `config:"optional"` // number of streams per connection (default: 128)
 	Port             int      `config:"optional"` // port to connect to, default: 9042
 
 	// TestMode affects whether a keyspace creation will be attempted on Cassandra initialization.
@@ -176,12 +176,7 @@ func (c *cassandra) IterQuery(queryString string, queryParams []interface{}, out
 
 // Return appropriate gocql.Consistency based on the provided consistency level name.
 func translateConsistency(consistencyName string) (gocql.Consistency, error) {
-	for index, name := range gocql.ConsistencyNames {
-		if name == consistencyName {
-			return gocql.Consistency(index), nil
-		}
-	}
-	return gocql.One, fmt.Errorf("unknown consistency: %v", consistencyName)
+	return gocql.ParseConsistency(consistencyName), nil
 }
 
 func translateDuration(k string, df time.Duration) (time.Duration, error) {
@@ -210,18 +205,14 @@ func setDefaults(cfg CassandraConfig) (*gocql.ClusterConfig, error) {
 		cfg.NumConns = 2
 	}
 
-	if cfg.NumStreams == 0 {
-		cfg.NumStreams = 128
-	}
-
 	cluster := gocql.NewCluster(cfg.Nodes...)
 	cluster.ProtoVersion = 2
 	cluster.CQLVersion = "3.0.0"
 	cluster.Timeout = timeout
 	cluster.NumConns = cfg.NumConns
-	cluster.NumStreams = cfg.NumStreams
 	cluster.SocketKeepalive = keepAlive
 	cluster.Port = cfg.Port
+	cluster.HostFilter = gocql.DataCentreHostFilter(cfg.DataCenter)
 
 	return cluster, nil
 }
