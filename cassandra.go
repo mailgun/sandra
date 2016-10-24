@@ -39,14 +39,16 @@ type CassandraConfig struct {
 	KeepAlive        string   `config:"optional"` // The keepalive period to use default: 0
 	NumConns         int      `config:"optional"` // number of connections per host (default: 2)
 	Port             int      `config:"optional"` // port to connect to, default: 9042
+	NumRetries       int      `config:"optional" yaml:"num_retries"` // number of retries in case of connection timeout
 
 	// TestMode affects whether a keyspace creation will be attempted on Cassandra initialization.
 	TestMode bool `config:"optional"`
 }
 
 func (c CassandraConfig) String() string {
-	return fmt.Sprintf("CassandraConfig(Nodes=%v, Keyspace=%v, ReadConsistency=%v, WriteConsistency=%v, TestMode=%v)",
-		c.Nodes, c.Keyspace, c.ReadConsistency, c.WriteConsistency, c.TestMode)
+	return fmt.Sprintf("CassandraConfig(DataCenter=%v, Nodes=%v, Keyspace=%v, ReadConsistency=%v," +
+		"WriteConsistency=%v, NumRetries=%v, TestMode=%v)",
+		c.DataCenter, c.Nodes, c.Keyspace, c.ReadConsistency, c.WriteConsistency, c.NumRetries, c.TestMode)
 }
 
 var NotFound = errors.New("Not found")
@@ -213,6 +215,10 @@ func setDefaults(cfg CassandraConfig) (*gocql.ClusterConfig, error) {
 	cluster.SocketKeepalive = keepAlive
 	cluster.Port = cfg.Port
 	cluster.HostFilter = gocql.DataCentreHostFilter(cfg.DataCenter)
+
+	if cfg.NumRetries != 0 {
+		cluster.RetryPolicy = &gocql.SimpleRetryPolicy{NumRetries: cfg.NumRetries}
+	}
 
 	return cluster, nil
 }
