@@ -40,6 +40,7 @@ type CassandraConfig struct {
 	NumConns         int      `config:"optional"` // number of connections per host (default: 2)
 	Port             int      `config:"optional"` // port to connect to, default: 9042
 	NumRetries       int      `config:"optional" yaml:"num_retries"` // number of retries in case of connection timeout
+	DisableInitialHostLookup bool // Don't preform ip address discovery on the cluster, just use the Nodes provided
 
 	// TestMode affects whether a keyspace creation will be attempted on Cassandra initialization.
 	TestMode bool `config:"optional"`
@@ -215,6 +216,7 @@ func setDefaults(cfg CassandraConfig) (*gocql.ClusterConfig, error) {
 	cluster.SocketKeepalive = keepAlive
 	cluster.Port = cfg.Port
 	cluster.HostFilter = gocql.DataCentreHostFilter(cfg.DataCenter)
+	cluster.DisableInitialHostLookup = cfg.DisableInitialHostLookup
 
 	if cfg.NumRetries != 0 {
 		cluster.RetryPolicy = &gocql.SimpleRetryPolicy{NumRetries: cfg.NumRetries}
