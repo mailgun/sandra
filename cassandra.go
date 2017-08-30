@@ -18,6 +18,7 @@ type Cassandra interface {
 	ScanCASQuery(string, []interface{}, ...interface{}) (bool, error)
 	IterQuery(string, []interface{}, ...interface{}) func() (int, bool, error)
 	Close() error
+	Config() CassandraConfig
 }
 
 type cassandra struct {
@@ -30,26 +31,29 @@ type cassandra struct {
 // CassandraConfig is a json and yaml friendly configuration struct
 type CassandraConfig struct {
 	// Required Parameters
-	Nodes            []string // addresses for the initial connections
-	DataCenter       string   // data center name
-	Keyspace         string   // initial keyspace
-	ReadConsistency  string   // consistency for read operations
-	WriteConsistency string   // consistency for write operations
-	Timeout          string   `config:"optional"` // connection timeout (default: 600ms)
-	KeepAlive        string   `config:"optional"` // The keepalive period to use default: 0
-	NumConns         int      `config:"optional"` // number of connections per host (default: 2)
-	Port             int      `config:"optional"` // port to connect to, default: 9042
-	NumRetries       int      `config:"optional" yaml:"num_retries"` // number of retries in case of connection timeout
-	DisableInitialHostLookup bool // Don't preform ip address discovery on the cluster, just use the Nodes provided
+	Nodes                    []string // addresses for the initial connections
+	DataCenter               string   // data center name
+	Keyspace                 string   // initial keyspace
+	ReadConsistency          string   // consistency for read operations
+	WriteConsistency         string   // consistency for write operations
+	Timeout                  string   `config:"optional"`                           // connection timeout (default: 600ms)
+	ConnectTimeout           string   `config:"optional" yaml:"connect_timeout"`    // initial connection timeout (default: 600ms)
+	KeepAlive                string   `config:"optional"`                           // The keepalive period to use default: 0
+	NumConns                 int      `config:"optional"`                           // number of connections per host (default: 2)
+	Port                     int      `config:"optional"`                           // port to connect to, default: 9042
+	NumRetries               int      `config:"optional" yaml:"num_retries"`        // number of retries in case of connection timeout
+	DisableInitialHostLookup bool     `config:"optional"`                           // Don't preform ip address discovery on the cluster, just use the Nodes provided
+	PreferRPCAddress         bool     `config:"optional" yaml:"prefer_rpc_address"` // Prefer to connect to rpc_addresses during cluster discovery
 
 	// TestMode affects whether a keyspace creation will be attempted on Cassandra initialization.
 	TestMode bool `config:"optional"`
 }
 
 func (c CassandraConfig) String() string {
-	return fmt.Sprintf("CassandraConfig(DataCenter=%v, Nodes=%v, Keyspace=%v, ReadConsistency=%v," +
-		"WriteConsistency=%v, NumRetries=%v, TestMode=%v)",
-		c.DataCenter, c.Nodes, c.Keyspace, c.ReadConsistency, c.WriteConsistency, c.NumRetries, c.TestMode)
+	return fmt.Sprintf("CassandraConfig(DataCenter=%v, Nodes=%v, Keyspace=%v, ReadConsistency=%v,"+
+		"WriteConsistency=%v, NumRetries=%v, TestMode=%v, Timeout=%s, ConnectTimeout=%s)",
+		c.DataCenter, c.Nodes, c.Keyspace, c.ReadConsistency,
+		c.WriteConsistency, c.NumRetries, c.TestMode, c.Timeout, c.ConnectTimeout)
 }
 
 var NotFound = errors.New("Not found")
@@ -106,6 +110,10 @@ func NewCassandra(config CassandraConfig) (Cassandra, error) {
 func (c *cassandra) Close() error {
 	c.session.Close()
 	return nil
+}
+
+func (c *cassandra) Config() CassandraConfig {
+	return c.config
 }
 
 // Query provides an access to the gocql.Query if a user of this library needs to tune some parameters for
@@ -200,6 +208,11 @@ func setDefaults(cfg CassandraConfig) (*gocql.ClusterConfig, error) {
 		return nil, err
 	}
 
+	connectTimeout, err := translateDuration(cfg.ConnectTimeout, 600*time.Millisecond)
+	if err != nil {
+		return nil, err
+	}
+
 	if cfg.Port == 0 {
 		cfg.Port = 9042
 	}
@@ -212,6 +225,7 @@ func setDefaults(cfg CassandraConfig) (*gocql.ClusterConfig, error) {
 	cluster.ProtoVersion = 2
 	cluster.CQLVersion = "3.0.0"
 	cluster.Timeout = timeout
+	cluster.ConnectTimeout = connectTimeout
 	cluster.NumConns = cfg.NumConns
 	cluster.SocketKeepalive = keepAlive
 	cluster.Port = cfg.Port
