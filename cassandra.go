@@ -187,7 +187,7 @@ func (c *cassandra) IterQuery(queryString string, queryParams []interface{}, out
 
 // Return appropriate gocql.Consistency based on the provided consistency level name.
 func translateConsistency(consistencyName string) (gocql.Consistency, error) {
-	return gocql.ParseConsistency(consistencyName), nil
+	return gocql.ParseConsistency(consistencyName)
 }
 
 func translateDuration(k string, df time.Duration) (time.Duration, error) {
