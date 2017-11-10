@@ -94,15 +94,8 @@ func NewCassandra(config CassandraConfig) (Cassandra, error) {
 		return nil, err
 	}
 
-	rcl, err := translateConsistency(config.ReadConsistency)
-	if err != nil {
-		return nil, err
-	}
-
-	wcl, err := translateConsistency(config.WriteConsistency)
-	if err != nil {
-		return nil, err
-	}
+	rcl := translateConsistency(config.ReadConsistency)
+	wcl := translateConsistency(config.WriteConsistency)
 
 	return &cassandra{session, config, rcl, wcl}, nil
 }
@@ -186,7 +179,7 @@ func (c *cassandra) IterQuery(queryString string, queryParams []interface{}, out
 }
 
 // Return appropriate gocql.Consistency based on the provided consistency level name.
-func translateConsistency(consistencyName string) (gocql.Consistency, error) {
+func translateConsistency(consistencyName string) gocql.Consistency {
 	return gocql.ParseConsistency(consistencyName)
 }
 
