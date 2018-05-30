@@ -215,7 +215,7 @@ func setDefaults(cfg CassandraConfig) (*gocql.ClusterConfig, error) {
 	}
 
 	cluster := gocql.NewCluster(cfg.Nodes...)
-	cluster.ProtoVersion = 2
+	cluster.ProtoVersion = 3
 	cluster.CQLVersion = "3.0.0"
 	cluster.Timeout = timeout
 	cluster.ConnectTimeout = connectTimeout
