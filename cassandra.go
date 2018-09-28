@@ -1,12 +1,11 @@
 package sandra
 
 import (
-	"errors"
 	"fmt"
 	"time"
 
 	"github.com/gocql/gocql"
-	"github.com/mailgun/log"
+	"github.com/pkg/errors"
 )
 
 type Cassandra interface {
@@ -59,18 +58,16 @@ func (c CassandraConfig) String() string {
 var NotFound = errors.New("Not found")
 
 func NewCassandra(config CassandraConfig) (Cassandra, error) {
-	log.Infof("Connecting to Cassandra with config: %v", config)
-
 	cluster, err := setDefaults(config)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "while setting config defaults")
 	}
 
 	// in test mode, create a keyspace if necessary
 	if config.TestMode == true {
 		session, err := cluster.CreateSession()
 		if err != nil {
-			return nil, err
+			return nil, errors.Wrap(err, "while creating session")
 		}
 
 		query := session.Query(
@@ -80,7 +77,7 @@ func NewCassandra(config CassandraConfig) (Cassandra, error) {
 				config.Keyspace))
 
 		if err := query.Exec(); err != nil {
-			log.Errorf("Error creating keyspace: %v", err)
+			return nil, errors.Wrap(err, "while creating keyspace")
 		}
 
 		session.Close()
@@ -91,7 +88,7 @@ func NewCassandra(config CassandraConfig) (Cassandra, error) {
 
 	session, err := cluster.CreateSession()
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "while creating session")
 	}
 
 	rcl := translateConsistency(config.ReadConsistency)
