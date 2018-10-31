@@ -30,19 +30,19 @@ type cassandra struct {
 // CassandraConfig is a json and yaml friendly configuration struct
 type CassandraConfig struct {
 	// Required Parameters
-	Nodes                    []string `json:"nodes"`                    // addresses for the initial connections
-	DataCenter               string   `json:"datacenter"`               // data center name
-	Keyspace                 string   `json:"keyspace"`                 // initial keyspace
-	ReadConsistency          string   `json:"readconsistency"`          // consistency for read operations
-	WriteConsistency         string   `json:"writeconsistency"`         // consistency for write operations
-	Timeout                  string   `json:"timeout"`                  // connection timeout (default: 600ms)
-	ConnectTimeout           string   `json:"connect_timeout"`          // initial connection timeout (default: 600ms)
-	KeepAlive                string   `json:"keepalive"`                // The keepalive period to use default: 0
-	NumConns                 int      `json:"numconns"`                 // number of connections per host (default: 2)
-	Port                     int      `json:"port"`                     // port to connect to, default: 9042
-	NumRetries               int      `json:"num_retries"`              // number of retries in case of connection timeout
-	DisableInitialHostLookup bool     `json:"disableinitialhostlookup"` // Don't preform ip address discovery on the cluster, just use the Nodes provided
-	PreferRPCAddress         bool     `json:"prefer_rpc_address"`       // Prefer to connect to rpc_addresses during cluster discovery
+	Nodes                    []string `json:"nodes"`                        // addresses for the initial connections
+	DataCenter               string   `json:"datacenter",config:"optional"` // data center name
+	Keyspace                 string   `json:"keyspace"`                     // initial keyspace
+	ReadConsistency          string   `json:"readconsistency"`              // consistency for read operations
+	WriteConsistency         string   `json:"writeconsistency"`             // consistency for write operations
+	Timeout                  string   `json:"timeout"`                      // connection timeout (default: 600ms)
+	ConnectTimeout           string   `json:"connect_timeout"`              // initial connection timeout (default: 600ms)
+	KeepAlive                string   `json:"keepalive"`                    // The keepalive period to use default: 0
+	NumConns                 int      `json:"numconns"`                     // number of connections per host (default: 2)
+	Port                     int      `json:"port"`                         // port to connect to, default: 9042
+	NumRetries               int      `json:"num_retries"`                  // number of retries in case of connection timeout
+	DisableInitialHostLookup bool     `json:"disableinitialhostlookup"`     // Don't preform ip address discovery on the cluster, just use the Nodes provided
+	PreferRPCAddress         bool     `json:"prefer_rpc_address"`           // Prefer to connect to rpc_addresses during cluster discovery
 
 	// TestMode affects whether a keyspace creation will be attempted on Cassandra initialization.
 	TestMode bool `config:"optional"`
