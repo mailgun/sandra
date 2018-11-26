@@ -20,6 +20,10 @@ func (c *TestErrorCassandra) Config() CassandraConfig {
 	return CassandraConfig{}
 }
 
+func (c *TestErrorCassandra) Session() *gocql.Session {
+	return nil
+}
+
 func (c *TestErrorCassandra) ExecuteQuery(queryString string, queryParams ...interface{}) error {
 	return fmt.Errorf("Error during ExecuteQuery")
 }
