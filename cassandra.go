@@ -18,6 +18,7 @@ type Cassandra interface {
 	IterQuery(string, []interface{}, ...interface{}) func() (int, bool, error)
 	Close() error
 	Config() CassandraConfig
+	Session() *gocql.Session
 }
 
 type cassandra struct {
@@ -104,6 +105,10 @@ func (c *cassandra) Close() error {
 
 func (c *cassandra) Config() CassandraConfig {
 	return c.config
+}
+
+func (c *cassandra) Session() *gocql.Session {
+	return c.session
 }
 
 // Query provides an access to the gocql.Query if a user of this library needs to tune some parameters for
