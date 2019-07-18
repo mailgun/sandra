@@ -54,6 +54,25 @@ func (c *TestErrorCassandra) Close() error {
 	return fmt.Errorf("Error during Close")
 }
 
+func TableExists(db Cassandra, table string) (bool, error) {
+	var tableName string
+	// Only tested with Cassandra 3.11.x
+	iter := db.IterQuery("SELECT table_name FROM system_schema.tables"+
+		" WHERE keyspace_name = ? AND table_name = ?",
+		[]interface{}{db.Config().Keyspace, table}, &tableName)
+	_, _, err := iter()
+
+	if err != nil {
+		return false, err
+	}
+
+	// If isn't empty, table exists
+	if tableName != "" {
+		return true, nil
+	}
+	return false, nil
+}
+
 func WaitForTables(db Cassandra, timeout time.Duration, tables ...string) error {
 	quit := false
 	mutex := sync.Mutex{}
@@ -65,20 +84,18 @@ func WaitForTables(db Cassandra, timeout time.Duration, tables ...string) error 
 
 	for _, table := range tables {
 	tryAgain:
-		var tableName string
-		// Only works for Cassandra 1.1 - 2.0 versions
-		iter := db.IterQuery("SELECT columnfamily_name FROM system.schema_columnfamilies"+
-			" WHERE keyspace_name = ? AND columnfamily_name = ?",
-			[]interface{}{db.Config().Keyspace, table}, &tableName)
-		_, _, err := iter()
-		if err == nil {
+		mutex.Lock()
+		exists, err := TableExists(db, table)
+		if err != nil {
+			mutex.Unlock()
 			return err
 		}
-		// If isn't empty, table exists
-		if tableName != "" {
-			continue
+
+		if exists {
+			mutex.Unlock()
+			break
 		}
-		mutex.Lock()
+
 		if quit {
 			mutex.Unlock()
 			return errors.Errorf("timeout waiting for table '%s'", table)
