@@ -45,8 +45,16 @@ type CassandraConfig struct {
 	DisableInitialHostLookup bool     `json:"disableinitialhostlookup"`     // Don't preform ip address discovery on the cluster, just use the Nodes provided
 	PreferRPCAddress         bool     `json:"prefer_rpc_address"`           // Prefer to connect to rpc_addresses during cluster discovery
 
+	// SSL Options
+	Ssl CassandraSslConfig `json:"ssl"` // ssl options cert/key/ca ...
+
 	// TestMode affects whether a keyspace creation will be attempted on Cassandra initialization.
 	TestMode bool `config:"optional"`
+}
+
+type CassandraSslConfig struct {
+	Enabled bool
+	Options *gocql.SslOptions
 }
 
 func (c CassandraConfig) String() string {
@@ -229,6 +237,10 @@ func setDefaults(cfg CassandraConfig) (*gocql.ClusterConfig, error) {
 
 	if cfg.NumRetries != 0 {
 		cluster.RetryPolicy = &gocql.SimpleRetryPolicy{NumRetries: cfg.NumRetries}
+	}
+
+	if cfg.Ssl.Enabled {
+		cluster.SslOpts = cfg.Ssl.Options
 	}
 
 	return cluster, nil
