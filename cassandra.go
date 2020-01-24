@@ -45,6 +45,10 @@ type CassandraConfig struct {
 	DisableInitialHostLookup bool     `json:"disableinitialhostlookup"`     // Don't preform ip address discovery on the cluster, just use the Nodes provided
 	PreferRPCAddress         bool     `json:"prefer_rpc_address"`           // Prefer to connect to rpc_addresses during cluster discovery
 
+	// Authentication
+	Username string `json:"username"`
+	Password string `json:"password"`
+
 	// SSL Options
 	Ssl CassandraSslConfig `json:"ssl"` // ssl options cert/key/ca ...
 
@@ -234,6 +238,13 @@ func setDefaults(cfg CassandraConfig) (*gocql.ClusterConfig, error) {
 	cluster.Port = cfg.Port
 	cluster.HostFilter = gocql.DataCentreHostFilter(cfg.DataCenter)
 	cluster.DisableInitialHostLookup = cfg.DisableInitialHostLookup
+
+	if cfg.Username != "" && cfg.Password != "" {
+		cluster.Authenticator = gocql.PasswordAuthenticator{
+			Username: cfg.Username,
+			Password: cfg.Password,
+		}
+	}
 
 	if cfg.NumRetries != 0 {
 		cluster.RetryPolicy = &gocql.SimpleRetryPolicy{NumRetries: cfg.NumRetries}
