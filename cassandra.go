@@ -36,6 +36,7 @@ type CassandraConfig struct {
 	Keyspace                 string   `json:"keyspace"`                     // initial keyspace
 	ReadConsistency          string   `json:"readconsistency"`              // consistency for read operations
 	WriteConsistency         string   `json:"writeconsistency"`             // consistency for write operations
+	SessionConsistency       string   `json:"session_consistency"`          // consistency that applies to all operations if no read or write consistency is set
 	Timeout                  string   `json:"timeout"`                      // connection timeout (default: 600ms)
 	ConnectTimeout           string   `json:"connect_timeout"`              // initial connection timeout (default: 600ms)
 	KeepAlive                string   `json:"keepalive"`                    // The keepalive period to use default: 0
@@ -63,9 +64,9 @@ type CassandraSslConfig struct {
 
 func (c CassandraConfig) String() string {
 	return fmt.Sprintf("CassandraConfig(DataCenter=%v, Nodes=%v, Keyspace=%v, ReadConsistency=%v,"+
-		"WriteConsistency=%v, NumRetries=%v, TestMode=%v, Timeout=%s, ConnectTimeout=%s)",
+		"WriteConsistency=%v, SessionConsistency=%v, NumRetries=%v, TestMode=%v, Timeout=%s, ConnectTimeout=%s)",
 		c.DataCenter, c.Nodes, c.Keyspace, c.ReadConsistency,
-		c.WriteConsistency, c.NumRetries, c.TestMode, c.Timeout, c.ConnectTimeout)
+		c.WriteConsistency, c.SessionConsistency, c.NumRetries, c.TestMode, c.Timeout, c.ConnectTimeout)
 }
 
 var NotFound = errors.New("Not found")
@@ -104,8 +105,8 @@ func NewCassandra(config CassandraConfig) (Cassandra, error) {
 		return nil, errors.Wrap(err, "while creating session")
 	}
 
-	rcl := translateConsistency(config.ReadConsistency)
-	wcl := translateConsistency(config.WriteConsistency)
+	rcl := gocql.ParseConsistency(config.ReadConsistency)
+	wcl := gocql.ParseConsistency(config.WriteConsistency)
 
 	return &cassandra{session, config, rcl, wcl}, nil
 }
@@ -192,11 +193,6 @@ func (c *cassandra) IterQuery(queryString string, queryParams []interface{}, out
 	}
 }
 
-// Return appropriate gocql.Consistency based on the provided consistency level name.
-func translateConsistency(consistencyName string) gocql.Consistency {
-	return gocql.ParseConsistency(consistencyName)
-}
-
 func translateDuration(k string, df time.Duration) (time.Duration, error) {
 	if k == "" {
 		return df, nil
@@ -238,6 +234,11 @@ func setDefaults(cfg CassandraConfig) (*gocql.ClusterConfig, error) {
 	cluster.Port = cfg.Port
 	cluster.HostFilter = gocql.DataCentreHostFilter(cfg.DataCenter)
 	cluster.DisableInitialHostLookup = cfg.DisableInitialHostLookup
+	cluster.Consistency = gocql.LocalQuorum
+
+	if cfg.SessionConsistency != "" {
+		cluster.Consistency = gocql.ParseConsistency(cfg.SessionConsistency)
+	}
 
 	if cfg.Username != "" && cfg.Password != "" {
 		cluster.Authenticator = gocql.PasswordAuthenticator{
