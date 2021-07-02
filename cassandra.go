@@ -32,7 +32,7 @@ type cassandra struct {
 type CassandraConfig struct {
 	// Required Parameters
 	Nodes                    []string `json:"nodes"`                        // addresses for the initial connections
-	DataCenter               string   `json:"datacenter",config:"optional"` // data center name
+	DataCenter               string   `json:"datacenter" config:"optional"` // data center name
 	Keyspace                 string   `json:"keyspace"`                     // initial keyspace
 	ReadConsistency          string   `json:"readconsistency"`              // consistency for read operations
 	WriteConsistency         string   `json:"writeconsistency"`             // consistency for write operations
@@ -78,7 +78,7 @@ func NewCassandra(config CassandraConfig) (Cassandra, error) {
 	}
 
 	// in test mode, create a keyspace if necessary
-	if config.TestMode == true {
+	if config.TestMode {
 		session, err := cluster.CreateSession()
 		if err != nil {
 			return nil, errors.Wrap(err, "while creating session")
@@ -145,7 +145,7 @@ func (c *cassandra) ExecuteBatch(batchType gocql.BatchType, queries []string, pa
 		return errors.New("Amount of queries and params does not match")
 	}
 
-	batch := gocql.NewBatch(batchType)
+	batch := c.session.NewBatch(batchType)
 	batch.Cons = c.wcl
 	for idx := 0; idx < count; idx++ {
 		batch.Query(queries[idx], params[idx]...)
