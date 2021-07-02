@@ -80,7 +80,7 @@ func (s *CassandraSuite) TestExecuteBatchError(c *C) {
 }
 
 func (s *CassandraSuite) TestScanQuerySuccess(c *C) {
-	s.cassandra.ExecuteQuery("insert into test (field) values (1)")
+	_ = s.cassandra.ExecuteQuery("insert into test (field) values (1)")
 	var field int
 	err := s.cassandra.ScanQuery("select * from test", []interface{}{}, &field)
 	c.Assert(err, IsNil)
@@ -114,8 +114,8 @@ func (s *CassandraSuite) TestScanCASQueryError(c *C) {
 }
 
 func (s *CassandraSuite) TestIterQuerySuccess(c *C) {
-	s.cassandra.ExecuteQuery("insert into test (field) values (1)")
-	s.cassandra.ExecuteQuery("insert into test (field) values (2)")
+	_ = s.cassandra.ExecuteQuery("insert into test (field) values (1)")
+	_ = s.cassandra.ExecuteQuery("insert into test (field) values (2)")
 
 	var field int
 	iter := s.cassandra.IterQuery("select * from test", []interface{}{}, &field)
@@ -135,7 +135,7 @@ func (s *CassandraSuite) TestIterQuerySuccess(c *C) {
 	c.Assert(field, Equals, 2)
 
 	// time to stop
-	idx, has_next, err = iter()
+	_, has_next, _ = iter()
 	c.Assert(has_next, Equals, false)
 }
 
@@ -159,6 +159,7 @@ func (s *CassandraSuite) TestConsistencyLevels(c *C) {
 			WriteConsistency: "one",
 			TestMode:         true,
 		})
+	c.Assert(err, IsNil)
 
 	// write should succeed
 	err = cassandra.ExecuteQuery("insert into test (field) values (42)")
@@ -182,6 +183,7 @@ func (s *CassandraSuite) TestConsistencyLevels(c *C) {
 			WriteConsistency: "two", // cannot be satisfied
 			TestMode:         true,
 		})
+	c.Assert(err, IsNil)
 
 	// write should fail
 	err = cassandra.ExecuteQuery("delete from test where field = 42")
