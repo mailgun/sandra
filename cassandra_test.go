@@ -72,6 +72,15 @@ func (s *CassandraSuite) TestExecuteQueryCtxError(c *C) {
 	c.Assert(err, NotNil)
 }
 
+func (s *CassandraSuite) TestExecuteQueryCtxCanceled(c *C) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	err := s.cassandra.ExecuteQueryCtx(ctx, "insert into test (field) values (1)")
+	c.Log(err)
+	c.Assert(err, NotNil)
+}
+
 func (s *CassandraSuite) TestExecuteBatchSuccess(c *C) {
 	queries := []string{
 		"insert into test (field) values (?)",
