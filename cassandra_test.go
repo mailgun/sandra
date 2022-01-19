@@ -1,6 +1,7 @@
 package sandra
 
 import (
+	"context"
 	"testing"
 
 	"github.com/gocql/gocql"
@@ -58,6 +59,16 @@ func (s *CassandraSuite) TestExecuteQuerySuccess(c *C) {
 
 func (s *CassandraSuite) TestExecuteQueryError(c *C) {
 	err := s.cassandra.ExecuteQuery("drop table unknown")
+	c.Assert(err, NotNil)
+}
+
+func (s *CassandraSuite) TestExecuteQueryCtxSuccess(c *C) {
+	err := s.cassandra.ExecuteQueryCtx(context.Background(), "insert into test (field) values (1)")
+	c.Assert(err, IsNil)
+}
+
+func (s *CassandraSuite) TestExecuteQueryCtxError(c *C) {
+	err := s.cassandra.ExecuteQueryCtx(context.Background(), "drop table unknown")
 	c.Assert(err, NotNil)
 }
 

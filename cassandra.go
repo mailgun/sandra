@@ -1,6 +1,7 @@
 package sandra
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -10,6 +11,7 @@ import (
 
 type Cassandra interface {
 	Query(gocql.Consistency, string, ...interface{}) *gocql.Query
+	ExecuteQueryCtx(ctx context.Context, queryString string, queryParams ...interface{}) error
 	ExecuteQuery(string, ...interface{}) error
 	ExecuteBatch(gocql.BatchType, []string, [][]interface{}) error
 	ExecuteUnloggedBatch([]string, [][]interface{}) error
@@ -131,9 +133,15 @@ func (c *cassandra) Query(consistency gocql.Consistency, queryString string, que
 	return c.session.Query(queryString, queryParams...).Consistency(consistency)
 }
 
+// ExecuteQueryCtx executes a single DML/DDL statement at the configured write consistency level.
+func (c *cassandra) ExecuteQueryCtx(ctx context.Context, queryString string, queryParams ...interface{}) error {
+	return c.Query(c.wcl, queryString, queryParams...).WithContext(ctx).Exec()
+}
+
 // ExecuteQuery executes a single DML/DDL statement at the configured write consistency level.
+// Deprecated: ExecuteQuery is deprecated. Switch to ExecuteQueryCtx.
 func (c *cassandra) ExecuteQuery(queryString string, queryParams ...interface{}) error {
-	return c.Query(c.wcl, queryString, queryParams...).Exec()
+	return c.ExecuteQueryCtx(context.Background(), queryString, queryParams...)
 }
 
 // ExecuteBatch executes a batch of DML/DDL statements at the configured write consistency level.
