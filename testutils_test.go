@@ -1,10 +1,10 @@
 package sandra
 
 import (
+	"context"
 	"fmt"
-	"time"
-
 	"sync"
+	"time"
 
 	"github.com/gocql/gocql"
 	"github.com/pkg/errors"
@@ -22,6 +22,10 @@ func (c *TestErrorCassandra) Config() CassandraConfig {
 
 func (c *TestErrorCassandra) Session() *gocql.Session {
 	return nil
+}
+
+func (c *TestErrorCassandra) ExecuteQueryCtx(_ context.Context, queryString string, queryParams ...interface{}) error {
+	return fmt.Errorf("error during ExecuteQueryCtx")
 }
 
 func (c *TestErrorCassandra) ExecuteQuery(queryString string, queryParams ...interface{}) error {
