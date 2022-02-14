@@ -33,21 +33,21 @@ type cassandra struct {
 // CassandraConfig is a json and yaml friendly configuration struct
 type CassandraConfig struct {
 	// Required Parameters
-	Nodes                    []string `json:"nodes"`                        // addresses for the initial connections
-	DataCenter               string   `json:"datacenter" config:"optional"` // data center name
-	Keyspace                 string   `json:"keyspace"`                     // initial keyspace
-	ReadConsistency          string   `json:"readconsistency"`              // consistency for read operations
-	WriteConsistency         string   `json:"writeconsistency"`             // consistency for write operations
-	SessionConsistency       string   `json:"session_consistency"`          // consistency that applies to all operations if no read or write consistency is set
-	Timeout                  string   `json:"timeout"`                      // connection timeout (default: 600ms)
-	ConnectTimeout           string   `json:"connect_timeout"`              // initial connection timeout (default: 600ms)
-	KeepAlive                string   `json:"keepalive"`                    // The keepalive period to use default: 0
-	NumConns                 int      `json:"numconns"`                     // number of connections per host (default: 2)
-	Port                     int      `json:"port"`                         // port to connect to, default: 9042
-	NumRetries               int      `json:"num_retries"`                  // number of retries in case of connection timeout
-	DisableInitialHostLookup bool     `json:"disableinitialhostlookup"`     // Don't preform ip address discovery on the cluster, just use the Nodes provided
-	PreferRPCAddress         bool     `json:"prefer_rpc_address"`           // Prefer to connect to rpc_addresses during cluster discovery
-
+	Nodes                    []string         `json:"nodes"`                        // addresses for the initial connections
+	DataCenter               string           `json:"datacenter" config:"optional"` // data center name
+	Keyspace                 string           `json:"keyspace"`                     // initial keyspace
+	ReadConsistency          string           `json:"readconsistency"`              // consistency for read operations
+	WriteConsistency         string           `json:"writeconsistency"`             // consistency for write operations
+	SessionConsistency       string           `json:"session_consistency"`          // consistency that applies to all operations if no read or write consistency is set
+	Timeout                  string           `json:"timeout"`                      // connection timeout (default: 600ms)
+	ConnectTimeout           string           `json:"connect_timeout"`              // initial connection timeout (default: 600ms)
+	KeepAlive                string           `json:"keepalive"`                    // The keepalive period to use default: 0
+	NumConns                 int              `json:"numconns"`                     // number of connections per host (default: 2)
+	Port                     int              `json:"port"`                         // port to connect to, default: 9042
+	NumRetries               int              `json:"num_retries"`                  // number of retries in case of connection timeout
+	DisableInitialHostLookup bool             `json:"disableinitialhostlookup"`     // Don't preform ip address discovery on the cluster, just use the Nodes provided
+	PreferRPCAddress         bool             `json:"prefer_rpc_address"`           // Prefer to connect to rpc_addresses during cluster discovery
+	PoolConfig               gocql.PoolConfig `json:""`
 	// Authentication
 	Username string `json:"username"`
 	Password string `json:"password"`
@@ -243,6 +243,7 @@ func setDefaults(cfg CassandraConfig) (*gocql.ClusterConfig, error) {
 	cluster.HostFilter = gocql.DataCentreHostFilter(cfg.DataCenter)
 	cluster.DisableInitialHostLookup = cfg.DisableInitialHostLookup
 	cluster.Consistency = gocql.LocalQuorum
+	cluster.PoolConfig = cfg.PoolConfig
 
 	if cfg.SessionConsistency != "" {
 		cluster.Consistency = gocql.ParseConsistency(cfg.SessionConsistency)
