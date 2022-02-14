@@ -3,11 +3,8 @@ package sandra
 import (
 	"context"
 	"fmt"
-	"sync"
-	"time"
 
 	"github.com/gocql/gocql"
-	"github.com/pkg/errors"
 )
 
 type TestErrorCassandra struct{}
@@ -56,57 +53,4 @@ func (c *TestErrorCassandra) IterQuery(queryString string, queryParams []interfa
 
 func (c *TestErrorCassandra) Close() error {
 	return fmt.Errorf("Error during Close")
-}
-
-func TableExists(db Cassandra, table string) (bool, error) {
-	var tableName string
-	// Only tested with Cassandra 3.11.x
-	iter := db.IterQuery("SELECT table_name FROM system_schema.tables"+
-		" WHERE keyspace_name = ? AND table_name = ?",
-		[]interface{}{db.Config().Keyspace, table}, &tableName)
-	_, _, err := iter()
-
-	if err != nil {
-		return false, err
-	}
-
-	// If isn't empty, table exists
-	if tableName != "" {
-		return true, nil
-	}
-	return false, nil
-}
-
-func WaitForTables(db Cassandra, timeout time.Duration, tables ...string) error {
-	quit := false
-	mutex := sync.Mutex{}
-	time.AfterFunc(timeout, func() {
-		mutex.Lock()
-		quit = true
-		mutex.Unlock()
-	})
-
-	for _, table := range tables {
-	tryAgain:
-		mutex.Lock()
-		exists, err := TableExists(db, table)
-		if err != nil {
-			mutex.Unlock()
-			return err
-		}
-
-		if exists {
-			mutex.Unlock()
-			break
-		}
-
-		if quit {
-			mutex.Unlock()
-			return errors.Errorf("timeout waiting for table '%s'", table)
-		}
-		mutex.Unlock()
-		time.Sleep(time.Millisecond * 500)
-		goto tryAgain
-	}
-	return nil
 }

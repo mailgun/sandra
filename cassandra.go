@@ -3,6 +3,7 @@ package sandra
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/gocql/gocql"
@@ -33,21 +34,21 @@ type cassandra struct {
 // CassandraConfig is a json and yaml friendly configuration struct
 type CassandraConfig struct {
 	// Required Parameters
-	Nodes                    []string `json:"nodes"`                        // addresses for the initial connections
-	DataCenter               string   `json:"datacenter" config:"optional"` // data center name
-	Keyspace                 string   `json:"keyspace"`                     // initial keyspace
-	ReadConsistency          string   `json:"readconsistency"`              // consistency for read operations
-	WriteConsistency         string   `json:"writeconsistency"`             // consistency for write operations
-	SessionConsistency       string   `json:"session_consistency"`          // consistency that applies to all operations if no read or write consistency is set
-	Timeout                  string   `json:"timeout"`                      // connection timeout (default: 600ms)
-	ConnectTimeout           string   `json:"connect_timeout"`              // initial connection timeout (default: 600ms)
-	KeepAlive                string   `json:"keepalive"`                    // The keepalive period to use default: 0
-	NumConns                 int      `json:"numconns"`                     // number of connections per host (default: 2)
-	Port                     int      `json:"port"`                         // port to connect to, default: 9042
-	NumRetries               int      `json:"num_retries"`                  // number of retries in case of connection timeout
-	DisableInitialHostLookup bool     `json:"disableinitialhostlookup"`     // Don't preform ip address discovery on the cluster, just use the Nodes provided
-	PreferRPCAddress         bool     `json:"prefer_rpc_address"`           // Prefer to connect to rpc_addresses during cluster discovery
-
+	Nodes                    []string         `json:"nodes"`                        // addresses for the initial connections
+	DataCenter               string           `json:"datacenter" config:"optional"` // data center name
+	Keyspace                 string           `json:"keyspace"`                     // initial keyspace
+	ReadConsistency          string           `json:"readconsistency"`              // consistency for read operations
+	WriteConsistency         string           `json:"writeconsistency"`             // consistency for write operations
+	SessionConsistency       string           `json:"session_consistency"`          // consistency that applies to all operations if no read or write consistency is set
+	Timeout                  string           `json:"timeout"`                      // connection timeout (default: 600ms)
+	ConnectTimeout           string           `json:"connect_timeout"`              // initial connection timeout (default: 600ms)
+	KeepAlive                string           `json:"keepalive"`                    // The keepalive period to use default: 0
+	NumConns                 int              `json:"numconns"`                     // number of connections per host (default: 2)
+	Port                     int              `json:"port"`                         // port to connect to, default: 9042
+	NumRetries               int              `json:"num_retries"`                  // number of retries in case of connection timeout
+	DisableInitialHostLookup bool             `json:"disableinitialhostlookup"`     // Don't preform ip address discovery on the cluster, just use the Nodes provided
+	PreferRPCAddress         bool             `json:"prefer_rpc_address"`           // Prefer to connect to rpc_addresses during cluster discovery
+	PoolConfig               gocql.PoolConfig `json:""`
 	// Authentication
 	Username string `json:"username"`
 	Password string `json:"password"`
@@ -201,6 +202,59 @@ func (c *cassandra) IterQuery(queryString string, queryParams []interface{}, out
 	}
 }
 
+func TableExists(db Cassandra, table string) (bool, error) {
+	var tableName string
+	// Only tested with Cassandra 3.11.x
+	iter := db.IterQuery("SELECT table_name FROM system_schema.tables"+
+		" WHERE keyspace_name = ? AND table_name = ?",
+		[]interface{}{db.Config().Keyspace, table}, &tableName)
+	_, _, err := iter()
+
+	if err != nil {
+		return false, err
+	}
+
+	// If isn't empty, table exists
+	if tableName != "" {
+		return true, nil
+	}
+	return false, nil
+}
+
+func WaitForTables(db Cassandra, timeout time.Duration, tables ...string) error {
+	quit := false
+	mutex := sync.Mutex{}
+	time.AfterFunc(timeout, func() {
+		mutex.Lock()
+		quit = true
+		mutex.Unlock()
+	})
+
+	for _, table := range tables {
+	tryAgain:
+		mutex.Lock()
+		exists, err := TableExists(db, table)
+		if err != nil {
+			mutex.Unlock()
+			return err
+		}
+
+		if exists {
+			mutex.Unlock()
+			break
+		}
+
+		if quit {
+			mutex.Unlock()
+			return errors.Errorf("timeout waiting for table '%s'", table)
+		}
+		mutex.Unlock()
+		time.Sleep(time.Millisecond * 500)
+		goto tryAgain
+	}
+	return nil
+}
+
 func translateDuration(k string, df time.Duration) (time.Duration, error) {
 	if k == "" {
 		return df, nil
@@ -243,6 +297,7 @@ func setDefaults(cfg CassandraConfig) (*gocql.ClusterConfig, error) {
 	cluster.HostFilter = gocql.DataCentreHostFilter(cfg.DataCenter)
 	cluster.DisableInitialHostLookup = cfg.DisableInitialHostLookup
 	cluster.Consistency = gocql.LocalQuorum
+	cluster.PoolConfig = cfg.PoolConfig
 
 	if cfg.SessionConsistency != "" {
 		cluster.Consistency = gocql.ParseConsistency(cfg.SessionConsistency)
