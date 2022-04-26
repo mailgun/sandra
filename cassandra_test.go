@@ -119,6 +119,29 @@ func (s *CassandraSuite) TestScanQueryError(c *C) {
 	c.Assert(err, NotNil)
 }
 
+func (s *CassandraSuite) TestScanQueryCtxSuccess(c *C) {
+	_ = s.cassandra.ExecuteQuery("insert into test (field) values (1)")
+	var field int
+	err := s.cassandra.ScanQueryCtx(context.Background(), "select * from test", []interface{}{}, &field)
+	c.Assert(err, IsNil)
+	c.Assert(field, Equals, 1)
+}
+
+func (s *CassandraSuite) TestScanQueryCtxError(c *C) {
+	var field int
+	err := s.cassandra.ScanQueryCtx(context.Background(), "select * from test where field = 999", []interface{}{}, &field)
+	c.Assert(err, Equals, NotFound)
+}
+
+func (s *CassandraSuite) TestScanQueryCtxCanceled(c *C) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	var field int
+	err := s.cassandra.ScanQueryCtx(ctx, "select * from unknown", []interface{}{}, &field)
+	c.Assert(err, NotNil)
+}
+
 func (s *CassandraSuite) TestScanCASQuerySuccess(c *C) {
 	var field int
 	applied, err := s.cassandra.ScanCASQuery("insert into test (field) values (3) if not exists", []interface{}{}, &field)
