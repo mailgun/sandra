@@ -16,6 +16,7 @@ type Cassandra interface {
 	ExecuteQuery(string, ...interface{}) error
 	ExecuteBatch(gocql.BatchType, []string, [][]interface{}) error
 	ExecuteUnloggedBatch([]string, [][]interface{}) error
+	ScanQueryCtx(ctx context.Context, queryString string, queryParams []interface{}, outParams ...interface{}) error
 	ScanQuery(string, []interface{}, ...interface{}) error
 	ScanCASQuery(string, []interface{}, ...interface{}) (bool, error)
 	IterQuery(string, []interface{}, ...interface{}) func() (int, bool, error)
@@ -169,15 +170,20 @@ func (c *cassandra) ExecuteUnloggedBatch(queries []string, params [][]interface{
 	return c.ExecuteBatch(gocql.UnloggedBatch, queries, params)
 }
 
-// ScanQuery executes a provided SELECT query at the configured read consistency level.
-func (c *cassandra) ScanQuery(queryString string, queryParams []interface{}, outParams ...interface{}) error {
-	if err := c.Query(c.rcl, queryString, queryParams...).Scan(outParams...); err != nil {
+// ScanQueryCtx executes a provided SELECT query at the configured read consistency level.
+func (c *cassandra) ScanQueryCtx(ctx context.Context, queryString string, queryParams []interface{}, outParams ...interface{}) error {
+	if err := c.Query(c.rcl, queryString, queryParams...).WithContext(ctx).Scan(outParams...); err != nil {
 		if err == gocql.ErrNotFound {
 			return NotFound
 		}
 		return err
 	}
 	return nil
+}
+
+// ScanQuery executes a provided SELECT query at the configured read consistency level.
+func (c *cassandra) ScanQuery(queryString string, queryParams []interface{}, outParams ...interface{}) error {
+	return c.ScanQueryCtx(context.Background(), queryString, queryParams, outParams...)
 }
 
 // ScanCASQuery executes a lightweight transaction (an UPDATE or INSERT statement containing an IF clause)

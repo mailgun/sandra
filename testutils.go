@@ -37,6 +37,10 @@ func (c *TestErrorCassandra) ExecuteUnloggedBatch(queries []string, params [][]i
 	return fmt.Errorf("Error during ExecuteUnloggedBatch")
 }
 
+func (c *TestErrorCassandra) ScanQueryCtx(_ context.Context, queryString string, queryParams []interface{}, outParams ...interface{}) error {
+	return fmt.Errorf("Error during ScanQueryCtx")
+}
+
 func (c *TestErrorCassandra) ScanQuery(queryString string, queryParams []interface{}, outParams ...interface{}) error {
 	return fmt.Errorf("Error during ScanQuery")
 }
