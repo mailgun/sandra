@@ -83,6 +83,10 @@ func NewCassandra(config CassandraConfig) (Cassandra, error) {
 
 	// in test mode, create a keyspace if necessary
 	if config.TestMode {
+		// The policy needs to be removed and then put back to avoid an
+		// error with the TokenAwareHostPolicy having Init called twice
+		policy := cluster.PoolConfig.HostSelectionPolicy
+		cluster.PoolConfig.HostSelectionPolicy = nil
 		session, err := cluster.CreateSession()
 		if err != nil {
 			return nil, errors.Wrap(err, "while creating session")
@@ -99,6 +103,7 @@ func NewCassandra(config CassandraConfig) (Cassandra, error) {
 		}
 
 		session.Close()
+		cluster.PoolConfig.HostSelectionPolicy = policy
 	}
 
 	// switch the keyspace
