@@ -9,6 +9,10 @@ import (
 
 type TestErrorCassandra struct{}
 
+func (c *TestErrorCassandra) QueryCtx(_ context.Context, consistency gocql.Consistency, queryString string, queryParams ...interface{}) *gocql.Query {
+	return nil
+}
+
 func (c *TestErrorCassandra) Query(consistency gocql.Consistency, queryString string, queryParams ...interface{}) *gocql.Query {
 	return nil
 }
@@ -29,8 +33,16 @@ func (c *TestErrorCassandra) ExecuteQuery(queryString string, queryParams ...int
 	return fmt.Errorf("Error during ExecuteQuery")
 }
 
+func (c *TestErrorCassandra) ExecuteBatchCtx(_ context.Context, batchType gocql.BatchType, queries []string, params [][]interface{}) error {
+	return fmt.Errorf("Error during ExecuteBatchCtx")
+}
+
 func (c *TestErrorCassandra) ExecuteBatch(batchType gocql.BatchType, queries []string, params [][]interface{}) error {
 	return fmt.Errorf("Error during ExecuteBatch")
+}
+
+func (c *TestErrorCassandra) ExecuteUnloggedBatchCtx(_ context.Context, queries []string, params [][]interface{}) error {
+	return fmt.Errorf("Error during ExecuteUnloggedBatchCtx")
 }
 
 func (c *TestErrorCassandra) ExecuteUnloggedBatch(queries []string, params [][]interface{}) error {
@@ -45,8 +57,18 @@ func (c *TestErrorCassandra) ScanQuery(queryString string, queryParams []interfa
 	return fmt.Errorf("Error during ScanQuery")
 }
 
+func (c *TestErrorCassandra) ScanCASQueryCtx(_ context.Context, queryString string, queryParams []interface{}, outParams ...interface{}) (bool, error) {
+	return false, fmt.Errorf("Error during ScanCASQueryCtx")
+}
+
 func (c *TestErrorCassandra) ScanCASQuery(queryString string, queryParams []interface{}, outParams ...interface{}) (bool, error) {
 	return false, fmt.Errorf("Error during ScanCASQuery")
+}
+
+func (c *TestErrorCassandra) IterQueryCtx(_ context.Context, queryString string, queryParams []interface{}, outParams ...interface{}) func() (int, bool, error) {
+	return func() (int, bool, error) {
+		return 0, true, fmt.Errorf("Error during IterQueryCtx")
+	}
 }
 
 func (c *TestErrorCassandra) IterQuery(queryString string, queryParams []interface{}, outParams ...interface{}) func() (int, bool, error) {
