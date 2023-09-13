@@ -11,14 +11,19 @@ import (
 )
 
 type Cassandra interface {
+	QueryCtx(ctx context.Context, consistency gocql.Consistency, queryString string, queryParams ...interface{}) *gocql.Query
 	Query(gocql.Consistency, string, ...interface{}) *gocql.Query
 	ExecuteQueryCtx(ctx context.Context, queryString string, queryParams ...interface{}) error
 	ExecuteQuery(string, ...interface{}) error
+	ExecuteBatchCtx(ctx context.Context, batchType gocql.BatchType, queries []string, params [][]interface{}) error
 	ExecuteBatch(gocql.BatchType, []string, [][]interface{}) error
+	ExecuteUnloggedBatchCtx(ctx context.Context, queries []string, params [][]interface{}) error
 	ExecuteUnloggedBatch([]string, [][]interface{}) error
 	ScanQueryCtx(ctx context.Context, queryString string, queryParams []interface{}, outParams ...interface{}) error
 	ScanQuery(string, []interface{}, ...interface{}) error
+	ScanCASQueryCtx(ctx context.Context, queryString string, queryParams []interface{}, outParams ...interface{}) (applied bool, err error)
 	ScanCASQuery(string, []interface{}, ...interface{}) (bool, error)
+	IterQueryCtx(ctx context.Context, queryString string, queryParams []interface{}, outParams ...interface{}) func() (idx int, hasNext bool, err error)
 	IterQuery(string, []interface{}, ...interface{}) func() (int, bool, error)
 	Close() error
 	Config() CassandraConfig
@@ -133,26 +138,32 @@ func (c *cassandra) Session() *gocql.Session {
 	return c.session
 }
 
-// Query provides an access to the gocql.Query if a user of this library needs to tune some parameters for
+// QueryCtx provides access to the gocql.Query if a user of this library needs to tune some parameters for
 // a specific query without modifying the parameters the library was configured with, for example to use
 // a consistency level that differs from the configured read/write consistency levels.
+func (c *cassandra) QueryCtx(ctx context.Context, consistency gocql.Consistency, queryString string, queryParams ...interface{}) *gocql.Query {
+	return c.session.Query(queryString, queryParams...).WithContext(ctx).Consistency(consistency)
+}
+
+// Query same as QueryCtx, but without context.Context.
+// Deprecated: Query is deprecated. Use QueryCtx instead.
 func (c *cassandra) Query(consistency gocql.Consistency, queryString string, queryParams ...interface{}) *gocql.Query {
-	return c.session.Query(queryString, queryParams...).Consistency(consistency)
+	return c.QueryCtx(context.Background(), consistency, queryString, queryParams...)
 }
 
 // ExecuteQueryCtx executes a single DML/DDL statement at the configured write consistency level.
 func (c *cassandra) ExecuteQueryCtx(ctx context.Context, queryString string, queryParams ...interface{}) error {
-	return c.Query(c.wcl, queryString, queryParams...).WithContext(ctx).Exec()
+	return c.QueryCtx(ctx, c.wcl, queryString, queryParams...).Exec()
 }
 
 // ExecuteQuery executes a single DML/DDL statement at the configured write consistency level.
-// Deprecated: ExecuteQuery is deprecated. Switch to ExecuteQueryCtx.
+// Deprecated: ExecuteQuery is deprecated. Use ExecuteQueryCtx instead.
 func (c *cassandra) ExecuteQuery(queryString string, queryParams ...interface{}) error {
 	return c.ExecuteQueryCtx(context.Background(), queryString, queryParams...)
 }
 
-// ExecuteBatch executes a batch of DML/DDL statements at the configured write consistency level.
-func (c *cassandra) ExecuteBatch(batchType gocql.BatchType, queries []string, params [][]interface{}) error {
+// ExecuteBatchCtx executes a batch of DML/DDL statements at the configured write consistency level.
+func (c *cassandra) ExecuteBatchCtx(ctx context.Context, batchType gocql.BatchType, queries []string, params [][]interface{}) error {
 	count := len(queries)
 
 	// quick sanity check
@@ -160,7 +171,7 @@ func (c *cassandra) ExecuteBatch(batchType gocql.BatchType, queries []string, pa
 		return errors.New("Amount of queries and params does not match")
 	}
 
-	batch := c.session.NewBatch(batchType)
+	batch := c.session.NewBatch(batchType).WithContext(ctx)
 	batch.Cons = c.wcl
 	for idx := 0; idx < count; idx++ {
 		batch.Query(queries[idx], params[idx]...)
@@ -169,15 +180,27 @@ func (c *cassandra) ExecuteBatch(batchType gocql.BatchType, queries []string, pa
 	return c.session.ExecuteBatch(batch)
 }
 
+// ExecuteBatch executes a batch of DML/DDL statements at the configured write consistency level.
+// Deprecated: ExecuteBatch is deprecated. Use ExecuteBatchCtx instead.
+func (c *cassandra) ExecuteBatch(batchType gocql.BatchType, queries []string, params [][]interface{}) error {
+	return c.ExecuteBatchCtx(context.Background(), batchType, queries, params)
+}
+
+// ExecuteUnloggedBatchCtx executes a batch of DML/DDL statements in a non-atomic way at the configured
+// write consistency level.
+func (c *cassandra) ExecuteUnloggedBatchCtx(ctx context.Context, queries []string, params [][]interface{}) error {
+	return c.ExecuteBatchCtx(ctx, gocql.UnloggedBatch, queries, params)
+}
+
 // ExecuteUnloggedBatch executes a batch of DML/DDL statements in a non-atomic way at the configured
 // write consistency level.
 func (c *cassandra) ExecuteUnloggedBatch(queries []string, params [][]interface{}) error {
-	return c.ExecuteBatch(gocql.UnloggedBatch, queries, params)
+	return c.ExecuteUnloggedBatchCtx(context.Background(), queries, params)
 }
 
 // ScanQueryCtx executes a provided SELECT query at the configured read consistency level.
 func (c *cassandra) ScanQueryCtx(ctx context.Context, queryString string, queryParams []interface{}, outParams ...interface{}) error {
-	if err := c.Query(c.rcl, queryString, queryParams...).WithContext(ctx).Scan(outParams...); err != nil {
+	if err := c.QueryCtx(ctx, c.rcl, queryString, queryParams...).Scan(outParams...); err != nil {
 		if err == gocql.ErrNotFound {
 			return NotFound
 		}
@@ -187,19 +210,29 @@ func (c *cassandra) ScanQueryCtx(ctx context.Context, queryString string, queryP
 }
 
 // ScanQuery executes a provided SELECT query at the configured read consistency level.
+// Deprecated: ScanQuery is deprecated. Use ScanQueryCtx instead.
 func (c *cassandra) ScanQuery(queryString string, queryParams []interface{}, outParams ...interface{}) error {
 	return c.ScanQueryCtx(context.Background(), queryString, queryParams, outParams...)
 }
 
-// ScanCASQuery executes a lightweight transaction (an UPDATE or INSERT statement containing an IF clause)
+// ScanCASQueryCtx executes a lightweight transaction (an UPDATE or INSERT statement containing an IF clause)
 // at the configured write consistency level.
-func (c *cassandra) ScanCASQuery(queryString string, queryParams []interface{}, outParams ...interface{}) (bool, error) {
-	return c.Query(c.wcl, queryString, queryParams...).ScanCAS(outParams...)
+func (c *cassandra) ScanCASQueryCtx(ctx context.Context, queryString string, queryParams []interface{}, outParams ...interface{},
+) (applied bool, err error) {
+	return c.QueryCtx(ctx, c.wcl, queryString, queryParams...).ScanCAS(outParams...)
 }
 
-// IterQuery consumes row by row of the provided SELECT query executed at the configured read consistency level.
-func (c *cassandra) IterQuery(queryString string, queryParams []interface{}, outParams ...interface{}) func() (int, bool, error) {
-	iter := c.Query(c.rcl, queryString, queryParams...).Iter()
+// ScanCASQuery executes a lightweight transaction (an UPDATE or INSERT statement containing an IF clause)
+// at the configured write consistency level.
+// Deprecated: ScanCASQuery is deprecated. Use ScanCASQueryCtx instead.
+func (c *cassandra) ScanCASQuery(queryString string, queryParams []interface{}, outParams ...interface{}) (bool, error) {
+	return c.ScanCASQueryCtx(context.Background(), queryString, queryParams, outParams...)
+}
+
+// IterQueryCtx consumes row by row of the provided SELECT query executed at the configured read consistency level.
+func (c *cassandra) IterQueryCtx(ctx context.Context, queryString string, queryParams []interface{}, outParams ...interface{},
+) func() (idx int, hasNext bool, err error) {
+	iter := c.QueryCtx(ctx, c.rcl, queryString, queryParams...).Iter()
 	idx := -1
 	return func() (int, bool, error) {
 		idx++
@@ -213,10 +246,16 @@ func (c *cassandra) IterQuery(queryString string, queryParams []interface{}, out
 	}
 }
 
-func TableExists(db Cassandra, table string) (bool, error) {
+// IterQuery consumes row by row of the provided SELECT query executed at the configured read consistency level.
+// Deprecated: IterQuery is deprecated. Use IterQueryCtx instead.
+func (c *cassandra) IterQuery(queryString string, queryParams []interface{}, outParams ...interface{}) func() (int, bool, error) {
+	return c.IterQueryCtx(context.Background(), queryString, queryParams, outParams...)
+}
+
+func TableExistsCtx(ctx context.Context, db Cassandra, table string) (bool, error) {
 	var tableName string
 	// Only tested with Cassandra 3.11.x
-	iter := db.IterQuery("SELECT table_name FROM system_schema.tables"+
+	iter := db.IterQueryCtx(ctx, "SELECT table_name FROM system_schema.tables"+
 		" WHERE keyspace_name = ? AND table_name = ?",
 		[]interface{}{db.Config().Keyspace, table}, &tableName)
 	_, _, err := iter()
@@ -232,7 +271,12 @@ func TableExists(db Cassandra, table string) (bool, error) {
 	return false, nil
 }
 
-func WaitForTables(db Cassandra, timeout time.Duration, tables ...string) error {
+// Deprecated: TableExists is deprecated. Use TableExistsCtx instead.
+func TableExists(db Cassandra, table string) (bool, error) {
+	return TableExistsCtx(context.Background(), db, table)
+}
+
+func WaitForTablesCtx(ctx context.Context, db Cassandra, timeout time.Duration, tables ...string) error {
 	quit := false
 	mutex := sync.Mutex{}
 	time.AfterFunc(timeout, func() {
@@ -244,7 +288,7 @@ func WaitForTables(db Cassandra, timeout time.Duration, tables ...string) error 
 	for _, table := range tables {
 	tryAgain:
 		mutex.Lock()
-		exists, err := TableExists(db, table)
+		exists, err := TableExistsCtx(ctx, db, table)
 		if err != nil {
 			mutex.Unlock()
 			return err
@@ -264,6 +308,11 @@ func WaitForTables(db Cassandra, timeout time.Duration, tables ...string) error 
 		goto tryAgain
 	}
 	return nil
+}
+
+// Deprecated: WaitForTables is deprecated. Use WaitForTablesCtx instead.
+func WaitForTables(db Cassandra, timeout time.Duration, tables ...string) error {
+	return WaitForTablesCtx(context.Background(), db, timeout, tables...)
 }
 
 func translateDuration(k string, df time.Duration) (time.Duration, error) {
