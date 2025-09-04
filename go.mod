@@ -1,6 +1,6 @@
 module github.com/mailgun/sandra
 
-go 1.22
+go 1.19
 
 require (
 	github.com/gocql/gocql v1.7.0
